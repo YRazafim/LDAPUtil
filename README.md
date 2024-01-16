@@ -25,4 +25,5 @@ Unpacking various LDAP attributes:
 
  # TODO
 
+ * Others interesting LDAP attributes ?
  * Adding LDAP attributes writing features. Or not, as there is already plenty of tools for doing so ...
