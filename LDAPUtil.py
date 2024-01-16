@@ -208,7 +208,6 @@ SECURITY_SERVER_LOGON_RID = 9
 SECURITY_NETWORK_SERVICE_RID = 0x00000014
 
 # https://docs.microsoft.com/en-us/windows/win32/secauthz/sid-strings
-# sid.py from https://github.com/skelsec/winacl 
 SDDL_NAME_VAL_MAPS = {
 	"AN" : "S-1-5-7", # Anonymous logon. The corresponding RID is SECURITY_ANONYMOUS_LOGON_RID.
 	"AO" : 	DOMAIN_ALIAS_RID.ACCOUNT_OPS.value, # Account operators. The corresponding RID is DOMAIN_ALIAS_RID_ACCOUNT_OPS.
@@ -259,7 +258,6 @@ SDDL_NAME_VAL_MAPS = {
 SDDL_VAL_NAME_MAPS = {v: k for k, v in SDDL_NAME_VAL_MAPS.items()}
 
 # https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f992ad60-0fe4-4b87-9fed-beb478836861
-# sid.py from https://github.com/skelsec/winacl
 class SID:
 	def __init__(self):
 		self.Revision = None
@@ -756,6 +754,7 @@ class ACE:
 		return x
 
 ### ACE Types ###
+# https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/628ebb1d-c509-4ea0-a10f-77ef97ca4586
 
 class SE_OBJECT_TYPE(enum.Enum):
 	SE_UNKNOWN_OBJECT_TYPE = 0 # Unknown object type.
@@ -1530,13 +1529,14 @@ ACEType2ACE = {
 ### ACL ###
 ###########
 
+# https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/20233ed8-a6c6-4097-aafa-dd545ed24428
 class ACL_REVISION(enum.Enum):
 	NO_DS = 0x02 # When set to 0x02, only AceTypes 0x00, 0x01, 0x02, 0x03, 0x11, 0x12, and 0x13 can be present in the ACL. An AceType of 0x11 is used for SACLs but not for DACLs. For more information about ACE types, see section 2.4.4.1.
 	DS = 0x04 # When set to 0x04, AceTypes 0x05, 0x06, 0x07, 0x08, and 0x11 are allowed. ACLs of revision 0x04 are applicable only to directory service objects. An AceType of 0x11 is used for SACLs but not for DACLs.
-
 ACL_REV_NODS_ALLOWED_TYPES = [0x00, 0x01, 0x02, 0x03, 0x11, 0x12, 0x13]
 ACL_REV_DS_ALLOWED_TYPES   = [0x05, 0x06, 0x07, 0x08, 0x11]
 
+# https://learn.microsoft.com/fr-fr/windows/win32/api/winnt/ns-winnt-acl
 class ACL:
 	def __init__(self, sd_object_type = None):
 		self.AclRevision = None
@@ -1609,6 +1609,7 @@ class ACL:
 ### Security Descriptor ###
 ###########################
 
+# https://learn.microsoft.com/en-us/windows-hardware/drivers/ifs/security-descriptor-control
 class SE_SACL(enum.IntFlag):
 	SE_DACL_AUTO_INHERIT_REQ = 0x0100 	# Indicates a required security descriptor in which the discretionary access control list (DACL) is set up to support automatic propagation of inheritable access control entries (ACEs) to existing child objects.
 										# For access control lists (ACLs) that support auto inheritance, this bit is always set. Protected servers can call the ConvertToAutoInheritPrivateObjectSecurity function to convert a security descriptor and set this flag.
@@ -1632,7 +1633,6 @@ class SE_SACL(enum.IntFlag):
 	SE_SACL_PRESENT   = 0x0010			# Indicates a security descriptor that has a SACL. To set this flag, use the SetSecurityDescriptorSacl function.
 	SE_SACL_PROTECTED = 0x2000			# Prevents the SACL of the security descriptor from being modified by inheritable ACEs. To set this flag, use the SetSecurityDescriptorControl function.
 	SE_SELF_RELATIVE  = 0x8000			# Indicates a self-relative security descriptor. If this flag is not set, the security descriptor is in absolute format. For more information, see Absolute and Self-Relative Security Descriptors.
-
 SDDL_ACL_CONTROL_FLAGS = {
 	"P"  : SE_SACL.SE_DACL_PROTECTED,
 	"AR" : SE_SACL.SE_DACL_AUTO_INHERIT_REQ,
@@ -1641,7 +1641,6 @@ SDDL_ACL_CONTROL_FLAGS = {
 	# "NO_ACCESS_CONTROL" : 0
 }
 SDDL_ACL_CONTROL_FLAGS_INV = {v: k for k, v in SDDL_ACL_CONTROL_FLAGS.items()}
-
 def SDDL_ACL_CONTROL(flags):
 	t = ''
 	for x in SDDL_ACL_CONTROL_FLAGS_INV:
@@ -1808,13 +1807,13 @@ class SECURITY_DESCRIPTOR:
 			acl = params['D']
 			m = acl.find('(')
 			if m != -1:
-				sd.Dacl = ACL.from_sddl(acl[m:], object_type=object_type, domain_sid = domain_sid)
+				sd.Dacl = ACL.from_sddl(acl[m:], object_type = object_type, domain_sid = domain_sid)
 		if 'S' in params:
 			sd.Control |= SE_SACL.SE_SACL_PRESENT
 			acl = params['S']
 			m = acl.find('(')
 			if m != -1:
-				sd.Sacl = ACL.from_sddl(acl[m:], object_type=object_type, domain_sid = domain_sid)
+				sd.Sacl = ACL.from_sddl(acl[m:], object_type = object_type, domain_sid = domain_sid)
 
 		return sd
 
