@@ -13,7 +13,7 @@ Unpacking various LDAP attributes:
     `Kerberos Constrained Delegation (KCD)` configured for `any authentication protocol (Kerberos and NTLM)` = with `Protocol Transition`
 * `gMSA` attributes with
   * `msDS-GroupMSAMembership`: `Security Descriptor` that describe the trustee that can access the `msds-ManagedPassword` attribute
-  * `msds-ManagedPassword`: Structure `MSDS-MANAGEDPASSWORD_BLOB` that contain password of the gMSA account
+  * `msds-ManagedPassword`: Structure `MSDS-MANAGEDPASSWORD_BLOB` that contain cleartext password of the gMSA account
   * `msDS-ManagedPasswordId`: Structure `MSDS-MANAGEDPASSWORD_ID` that contain `Root Key Identifier` used for generation of `msds-ManagedPassword`
   * `msDS-ManagedPasswordInterval`: Number of days interval between password changing
 * `LAPS` attributes with
