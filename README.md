@@ -23,6 +23,18 @@ Unpacking various LDAP attributes:
 
  All credits to <https://github.com/skelsec/winacl> for Windows `Security Descriptor` parsing.
 
+ # Tools
+
+ * Requirements
+```
+sudo apt install -y libkrb5-dev libssl-dev
+python3 -m pip install gssapi
+```
+* Howto
+```
+pthon3 LDAPUtil.py --help
+```
+
  # TODO
 
  * Others interesting LDAP attributes ?
