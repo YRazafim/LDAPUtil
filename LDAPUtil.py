@@ -9,6 +9,7 @@ ctypes.CDLL("libssl.so").OSSL_PROVIDER_load(None, b"default")
 
 # LDAP connection libs
 from ldap3 import Server, Connection, NTLM, SASL, KERBEROS, ALL, SUBTREE, ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES
+from ldap3.core.exceptions import LDAPAttributeError
 from gssapi import Credentials
 
 ######################
@@ -16,6 +17,10 @@ from gssapi import Credentials
 ######################
 
 def connect_ldap(server_url, username, password, nthash, domain, authentication, ccache):
+	if (server_url == None or username == None or domain == None or authentication == None):
+		print("[-] ServerURL/Username/Domain/AuthenticationMethod missing")
+		exit()
+
 	use_ssl = server_url.lower().startswith("ldaps://")
 	if server_url.lower().startswith("ldap-starttls://"):
 		use_start_tls = True
@@ -1821,7 +1826,7 @@ class SECURITY_DESCRIPTOR:
 ### SDDL ###
 ############
 
-def parseSDDL(sd, sddl, dn = None, sid_filter = None):
+def parseSDDL(sd, sddl, dn = None, sids_filter = None):
 	# Sometimes the SDDL is defined but contain no ACE
 	# For example for msDS-AllowedToActOnBehalfOfOtherIdentity
 	if (sd.Dacl.AceCount != 0):
@@ -1849,11 +1854,12 @@ def parseSDDL(sd, sddl, dn = None, sid_filter = None):
 			# Inherit_Object_GUID parsing
 			inherit_object_guid = SDDL_TO_ACE_OBJECT_GUID_STR(inherit_object_guid)
 
-			if (sid_filter != None):
-				# Is the trustee we search for ?
-				if (account_sid == sid_filter):
-					print("[+] Found ACE that apply to '{}':".format(dn))
-					print(f"\tACE Type = {type}\n\tACE Flags = {flags}\n\tACE Rights = {mask}\n\tACE Object = {object_guid}\n\tACE Inherit Object = {inherit_object_guid}\n\tACE Trustee SID = {account_sid}")
+			if (sids_filter != None):
+				for sid in sids_filter:
+					# Is the trustee we search for ?
+					if (account_sid == sid):
+						print("[+] Found ACE that apply to '{}':".format(dn))
+						print(f"\tACE Type = {type}\n\tACE Flags = {flags}\n\tACE Rights = {mask}\n\tACE Object = {object_guid}\n\tACE Inherit Object = {inherit_object_guid}\n\tACE Trustee SID = {account_sid}")
 			else:
 				print("[+] Found ACE:")
 				print(f"\tACE Type = {type}\n\tACE Flags = {flags}\n\tACE Rights = {mask}\n\tACE Object = {object_guid}\n\tACE Inherit Object = {inherit_object_guid}\n\tACE Trustee SID = {account_sid}")
@@ -1886,7 +1892,7 @@ def parseNTSecurityDescriptor(sdData, dn, sid_filter = None):
 
 	parseSDDL(sd, sddl, dn, sid_filter)
 
-def listACEWithTrusteeSID(conn, domain, sid):
+def listACEWithTrusteeSID(conn, domain, sids):
 	print("-----------------------------------------------------")
 	print("[+] Listing AD objects the provided SID is trusted")
 	print("-----------------------------------------------------")
@@ -1897,7 +1903,7 @@ def listACEWithTrusteeSID(conn, domain, sid):
 			NtSecurityDescriptor = entry["raw_attributes"]["nTSecurityDescriptor"]
 			if NtSecurityDescriptor != []:
 				NtSecurityDescriptor = NtSecurityDescriptor[0]
-				parseNTSecurityDescriptor(NtSecurityDescriptor, entry["attributes"]["distinguishedName"], sid)
+				parseNTSecurityDescriptor(NtSecurityDescriptor, entry["attributes"]["distinguishedName"], sids)
 
 def getACLForDN(conn, domain, dn):
 	print("-----------------------------------------------------")
@@ -2158,19 +2164,22 @@ def listLAPS(conn, domain):
 	print("[+] Listing LA pwds managed by LAPS")
 	print("-------------------------")
 
-	entry_generator = search(conn, domain, attributes = ["sAMAccountName", "ms-Mcs-AdmPwd", "ms-Mcs-AdmPwdExpirationTime"])
-	nbentries = 0
-	for entry in entry_generator:
-		if entry["type"] == "searchResEntry":
-			if entry["raw_attributes"]["ms-Mcs-AdmPwd"] != []:
-				nbentries += 1
-				pwd = entry["raw_attributes"]["ms-Mcs-AdmPwd"][0].decode()
-				timestamp = int(entry["raw_attributes"]["ms-Mcs-AdmPwdExpirationTime"][0])
-				date = windows_timestamp_to_date(timestamp)
-				print("[+] Found LA pwd for computer '{}' = {} (Expiration date = {})".format(entry["raw_attributes"]["sAMAccountName"][0].decode(), pwd, date))
+	try:
+		entry_generator = search(conn, domain, attributes = ["sAMAccountName", "ms-Mcs-AdmPwd", "ms-Mcs-AdmPwdExpirationTime"])
+		nbentries = 0
+		for entry in entry_generator:
+			if entry["type"] == "searchResEntry":
+				if entry["raw_attributes"]["ms-Mcs-AdmPwd"] != []:
+					nbentries += 1
+					pwd = entry["raw_attributes"]["ms-Mcs-AdmPwd"][0].decode()
+					timestamp = int(entry["raw_attributes"]["ms-Mcs-AdmPwdExpirationTime"][0])
+					date = windows_timestamp_to_date(timestamp)
+					print("[+] Found LA pwd for computer '{}' = {} (Expiration date = {})".format(entry["raw_attributes"]["sAMAccountName"][0].decode(), pwd, date))
 
-	if nbentries == 0:
-		print("[-] No managed LA pwds by LAPS and/or user does not have rights to read pwds")
+		if nbentries == 0:
+			print("[-] No managed LA pwds by LAPS and/or user does not have rights to read pwds")
+	except LDAPAttributeError:
+		print("[-] LAPS not installed on the domain")
 
 #################
 ### Bitlocker ###
@@ -2207,7 +2216,10 @@ def LDAPQuery(conn, domain, filter = "(objectClass=*)", attributes = [ALL_ATTRIB
 	for entry in entry_generator:
 		if entry["type"] == "searchResEntry":
 			nbentries += 1
-			print("[+] Entry {}: {}".format(nbentries, entry["attributes"]))
+			dict = entry["attributes"]
+			print("[+] Entry {}:".format(nbentries))
+			for key, value in dict.items():
+				print("\t{}: {}".format(key, value))
 	print(f"[+] Returned {nbentries} entries")
 
 ############
@@ -2218,16 +2230,16 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description = "LDAP utility tool for parsing/building/searching LDAP attributes")
 
 	auth_group = parser.add_argument_group('Authentication options')
-	auth_group.add_argument("--server_url", help = "<ldap[s]/ldap-starttls>://<IP/FQDN>. FQDN is required for Kerberos authentication", required = True)
-	auth_group.add_argument("--authentication", choices = ["NTLM", "Kerberos"], help = "Authentication method", required = True)
-	auth_group.add_argument("--username", help = "Username for authentication", required = True)
+	auth_group.add_argument("--server_url", help = "<ldap[s]/ldap-starttls>://<IP/FQDN>. FQDN is required for Kerberos authentication")
+	auth_group.add_argument("--authentication", choices = ["NTLM", "Kerberos"], help = "Authentication method")
+	auth_group.add_argument("--username", help = "Username for authentication")
 	auth_group.add_argument("--nthash", help = "NT hash for NTLM authentication")
 	auth_group.add_argument("--password", help = "Password for NTLM authentication")
-	auth_group.add_argument("--domain", help = "Domain for authentication", required = True)
+	auth_group.add_argument("--domain", help = "Domain for authentication")
 	auth_group.add_argument("--ccache", help = "Path to .ccache file for Kerberos authentication")
 
 	ntsecuritydesc_group = parser.add_argument_group('nTSecurityDescriptor options')
-	ntsecuritydesc_group.add_argument("--listACEWithTrusteeSID", help = "List AD objects' ACEs on which that following SID is trusted")
+	ntsecuritydesc_group.add_argument("--listACEWithTrusteeSID", help = "List AD objects' ACEs on which provided SIDs are trusted. Commas separated list")
 	ntsecuritydesc_group.add_argument("--getACLForDN", help = "Get ACLs for the following distinguishedName")
 	ntsecuritydesc_group.add_argument("--buildNtSecurityDescriptor", help = "Build nTSecurityDescriptor in binary format from SDDL string that describe the Owner + Group + DACL for the object")
 
@@ -2264,13 +2276,18 @@ if __name__ == "__main__":
 
 	args = parser.parse_args()
 
-	conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+	conn = None
 
 	if (args.listACEWithTrusteeSID != None):
-		listACEWithTrusteeSID(conn, args.domain, args.listACEWithTrusteeSID)
+		sids = args.listACEWithTrusteeSID.split(",")
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+		listACEWithTrusteeSID(conn, args.domain, sids)
 	if (args.buildNtSecurityDescriptor != None):
 		buildNTSecurityDescriptor(args.buildNtSecurityDescriptor)
 	if (args.getACLForDN != None):
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
 		getACLForDN(conn, args.domain, args.getACLForDN)
 	if (args.buildAllowedToActOnBehalfOfOtherIdentity != None):
 		buildAllowedToActOnBehalfOfOtherIdentity(args.buildAllowedToActOnBehalfOfOtherIdentity)
@@ -2289,10 +2306,16 @@ if __name__ == "__main__":
 	if (args.parseUserAccountControl != None):
 		parseUserAccountControl(args.parseUserAccountControl)
 	if (args.listGMSA):
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
 		listGMSA(conn, args.domain)
 	if (args.listLAPS):
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
 		listLAPS(conn, args.domain)
 	if (args.listBitlocker):
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
 		listBitlocker(conn, args.domain)
 
 	if (args.rawLDAPQuery):
@@ -2304,4 +2327,6 @@ if __name__ == "__main__":
 			attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES]
 		else:
 			attributes = args.LDAPAttributes.split(",")
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
 		LDAPQuery(conn, args.domain, filter, attributes, args.LDAPControls)
