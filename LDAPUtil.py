@@ -54,8 +54,11 @@ def connect_ldap(server_url, username, password, nthash, domain, authentication,
 		print("[-] Invalid authentication method")
 		exit()
 
-def search(conn, domain, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
-	base_dn = ",".join(f"DC={component}" for component in domain.split("."))
+def search(conn, domain, baseDN, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
+	if baseDN != None:
+		base_dn = baseDN
+	else:
+		base_dn = ",".join(f"DC={component}" for component in domain.split("."))
 	entry_generator = conn.extend.standard.paged_search(search_base = base_dn,
                     search_filter = filter,
                     search_scope = SUBTREE,
@@ -1894,7 +1897,7 @@ def parseNTSecurityDescriptor(sdData, dn, sid_filter = None):
 
 def listACEWithTrusteeSID(conn, domain, sids):
 	print("-----------------------------------------------------")
-	print("[+] Listing AD objects the provided SID is trusted")
+	print("[+] Listing AD objects the provided SIDs are trusted")
 	print("-----------------------------------------------------")
 	control_value = b"\x30\x0b\x02\x01\x77\x04\x00\xa0\x04\x30\x02\x04\x00"  # Control value for LDAP Extended Operation
 	entry_generator = search(conn, domain, attributes = ["distinguishedName", "nTSecurityDescriptor"], controls = [("1.2.840.113556.1.4.801", True, control_value),])
@@ -2206,12 +2209,12 @@ def listBitlocker(conn, domain):
 ### Raw LDAP query ###
 ######################
 
-def LDAPQuery(conn, domain, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
+def LDAPQuery(conn, domain, baseDN, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
 	print("-------------------------")
 	print("[+] Sending raw LDAP query")
 	print("-------------------------")
 
-	entry_generator = search(conn, domain, filter = filter, attributes = attributes, controls = controls)
+	entry_generator = search(conn, domain, baseDN, filter = filter, attributes = attributes, controls = controls)
 	nbentries = 0
 	for entry in entry_generator:
 		if entry["type"] == "searchResEntry":
@@ -2270,6 +2273,7 @@ if __name__ == "__main__":
 
 	rawLDAPQuery_group = parser.add_argument_group('Raw LDAP query options')
 	rawLDAPQuery_group.add_argument("--rawLDAPQuery", help = "Perform raw LDAP query", action = "store_true")
+	rawLDAPQuery_group.add_argument("--LDAPBaseDN", help = "LDAP Base DN to search into. Example: OU=MyOU,DC=MyDomain,DC=TLD")
 	rawLDAPQuery_group.add_argument("--LDAPFilter", help = "LDAP filter")
 	rawLDAPQuery_group.add_argument("--LDAPAttributes", help = "LDAP attributes to search for. Commas separated list")
 	rawLDAPQuery_group.add_argument("--LDAPControls", help = "LDAP additional controls to send in the request")
@@ -2329,4 +2333,4 @@ if __name__ == "__main__":
 			attributes = args.LDAPAttributes.split(",")
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
-		LDAPQuery(conn, args.domain, filter, attributes, args.LDAPControls)
+		LDAPQuery(conn, args.domain, args.LDAPBaseDN, filter, attributes, args.LDAPControls)
