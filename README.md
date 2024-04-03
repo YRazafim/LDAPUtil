@@ -32,7 +32,7 @@ python3 -m pip install gssapi
 ```
 * Howto
 ```
-pthon3 LDAPUtil.py --help
+python3 LDAPUtil.py --help
 ```
 
  # TODO
