@@ -54,7 +54,7 @@ def connect_ldap(server_url, username, password, nthash, domain, authentication,
 		print("[-] Invalid authentication method")
 		exit()
 
-def search(conn, domain, baseDN, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
+def search(conn, domain, baseDN = None, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
 	if baseDN != None:
 		base_dn = baseDN
 	else:
@@ -123,6 +123,8 @@ def parseObjectGUID(guidB64):
 
 	# Print GUID
 	print(f"[+] objectGUID = {guid.__str__()}")
+ 
+	return guid.__str__()
 
 def buildObjectGUID(guidStr):
 	print("-------------------------")
@@ -139,6 +141,8 @@ def buildObjectGUID(guidStr):
 	guidB64 = base64.b64encode(guidBytes)
 
 	print(f"[+] objectGUID = {guidB64.decode()}")
+ 
+	return guidB64.decode()
 
 #################
 ### objectSid ###
@@ -372,6 +376,8 @@ def parseObjectSID(sidB64):
 
 	# Print SID
 	print(f"[+] objectSid = {sid.__str__()}")
+ 
+	return sid.__str__()
 
 def buildObjectSID(sidStr):
 	print("-------------------------")
@@ -388,6 +394,8 @@ def buildObjectSID(sidStr):
 	sidB64 = base64.b64encode(sidBytes)
 
 	print(f"[+] objectSid = {sidB64.decode()}")
+ 
+	return sidB64.decode()
 
 ###########
 ### ACE ###
@@ -1885,20 +1893,59 @@ def buildNTSecurityDescriptor(sddlStr):
 
 	print(f"[+] nTSecurityDescriptor = {sdB64.decode()}")
 
-def parseNTSecurityDescriptor(sdData, dn, sid_filter = None):
+	return sdB64.decode()
+
+def parseNTSecurityDescriptor(sdData, dn = None, sids_filter = None):
 	# Binary format to SDDL format (https://github.com/skelsec/winacl)
 	sd = SECURITY_DESCRIPTOR.from_bytes(sdData)
 	sddl = sd.to_sddl()
 
-	if (sid_filter == None):
+	if (sids_filter == None):
 		print(f"[+] SSDL = {sddl}")
 
-	parseSDDL(sd, sddl, dn, sid_filter)
+	parseSDDL(sd, sddl, dn, sids_filter)
+ 
+	return sddl
 
-def listACEWithTrusteeSID(conn, domain, sids):
+def getMemberOfs(conn, domain, objects):
+	res = objects
+	for object in objects:
+		if isinstance(object, bytes):
+			object = object.decode()
+		entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(name={object})(distinguishedName={object}))", attributes = ["memberOf", "samAccountName"])
+		for entry in entry_generator:
+			if entry["type"] == "searchResEntry":
+				dns = entry["raw_attributes"]["memberOf"]
+				if (len(dns) != 0):
+					res += getMemberOfs(conn, domain, dns)
+	return list(set(res))
+
+def getSIDs(conn, domain, objects):
+	sids = []
+	for object in objects:
+		if isinstance(object, bytes):
+			object = object.decode()
+		entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(name={object})(distinguishedName={object}))", attributes = ["objectSID"])
+		for entry in entry_generator:
+			if entry["type"] == "searchResEntry":
+				sids += [entry["attributes"]["objectSID"]]
+    
+	return sids
+
+def listACEWithTrusteeSID(conn, domain, sams, recursive):
 	print("-----------------------------------------------------")
-	print("[+] Listing AD objects the provided SIDs are trusted")
+	print("[+] Listing AD objects the provided samAccountName are trusted")
 	print("-----------------------------------------------------")
+ 
+	objects = sams
+ 
+	if (recursive):
+		print("[+] Searching memberOf's for provided samAccountName")
+		objects = getMemberOfs(conn, domain, objects)
+  
+	# Get SIDs from samAccountName, name or distinguishedName
+	sids = getSIDs(conn, domain, objects)
+  
 	control_value = b"\x30\x0b\x02\x01\x77\x04\x00\xa0\x04\x30\x02\x04\x00"  # Control value for LDAP Extended Operation
 	entry_generator = search(conn, domain, attributes = ["distinguishedName", "nTSecurityDescriptor"], controls = [("1.2.840.113556.1.4.801", True, control_value),])
 	for entry in entry_generator:
@@ -1906,7 +1953,7 @@ def listACEWithTrusteeSID(conn, domain, sids):
 			NtSecurityDescriptor = entry["raw_attributes"]["nTSecurityDescriptor"]
 			if NtSecurityDescriptor != []:
 				NtSecurityDescriptor = NtSecurityDescriptor[0]
-				parseNTSecurityDescriptor(NtSecurityDescriptor, entry["attributes"]["distinguishedName"], sids)
+				x = parseNTSecurityDescriptor(NtSecurityDescriptor, entry["attributes"]["distinguishedName"], sids)
 
 def getACLForDN(conn, domain, dn):
 	print("-----------------------------------------------------")
@@ -1919,7 +1966,7 @@ def getACLForDN(conn, domain, dn):
 			NtSecurityDescriptor = entry["raw_attributes"]["nTSecurityDescriptor"]
 			if NtSecurityDescriptor != []:
 				NtSecurityDescriptor = NtSecurityDescriptor[0]
-				parseNTSecurityDescriptor(NtSecurityDescriptor, entry["attributes"]["distinguishedName"])
+				x = parseNTSecurityDescriptor(NtSecurityDescriptor, entry["attributes"]["distinguishedName"])
 
 ################################################
 ### msDS-AllowedToActOnBehalfOfOtherIdentity ###
@@ -1939,6 +1986,8 @@ def parseAllowedToActOnBehalfOfOtherIdentity(sdB64):
 	print(f"[+] SSDL = {sddl}")
 
 	parseSDDL(sd, sddl)
+ 
+	return sddl
 
 def buildAllowedToActOnBehalfOfOtherIdentity(sddlStr):
 	print("-----------------------------------------------------")
@@ -1951,6 +2000,8 @@ def buildAllowedToActOnBehalfOfOtherIdentity(sddlStr):
 	sdB64 = base64.b64encode(sdBytes)
 
 	print(f"[+] msDS-AllowedToActOnBehalfOfOtherIdentity = {sdB64.decode()}")
+
+	return sdB64.decode()
 
 ##########################
 ### userAccountControl ###
@@ -1992,6 +2043,8 @@ def parseUserAccountControl(uacVal):
 
 	print(f"[+] userAccountControl = {uacStr}")
 
+	return uacStr
+
 def buildUserAccountControl(uacStr):
 	print("-------------------------")
 	print("[+] Building userAccountControl")
@@ -2003,6 +2056,8 @@ def buildUserAccountControl(uacStr):
 		uacVal += USER_ACCOUNT_CONTROL_MASK[property]
 
 	print(f"[+] userAccountControl = {str(uacVal)}")
+ 
+	return str(uacVal)
 
 ############
 ### gMSA ###
@@ -2242,24 +2297,26 @@ if __name__ == "__main__":
 	auth_group.add_argument("--ccache", help = "Path to .ccache file for Kerberos authentication")
 
 	ntsecuritydesc_group = parser.add_argument_group('nTSecurityDescriptor options')
-	ntsecuritydesc_group.add_argument("--listACEWithTrusteeSID", help = "List AD objects' ACEs on which provided SIDs are trusted. Commas separated list")
+	ntsecuritydesc_group.add_argument("--listACEWithTrusteeSID", help = "List AD objects' ACEs on which provided samAccountName are trusted. Commas separated list")
+	ntsecuritydesc_group.add_argument("--recursiveACEWithTrusteeSID", help = "Recursively check samAccountName's memberOf for ACEs trusts", action = "store_true")
 	ntsecuritydesc_group.add_argument("--getACLForDN", help = "Get ACLs for the following distinguishedName")
-	ntsecuritydesc_group.add_argument("--buildNtSecurityDescriptor", help = "Build nTSecurityDescriptor in binary format from SDDL string that describe the Owner + Group + DACL for the object")
+	ntsecuritydesc_group.add_argument("--buildNTSecurityDescriptor", help = "Build nTSecurityDescriptor in binary format Base64-encoded from SDDL string that describe the Owner + Group + DACL for the object")
+	ntsecuritydesc_group.add_argument("--parseNTSecurityDescriptor", help = "Parse nTSecurityDescriptor from SDDL string in Base64 that describe the Owner + Group + DACL for the object")
 
 	allowedToActOnBehalfOfOtherIdentity_group = parser.add_argument_group('msDS-AllowedToActOnBehalfOfOtherIdentity options')
-	allowedToActOnBehalfOfOtherIdentity_group.add_argument("--buildAllowedToActOnBehalfOfOtherIdentity", help = "Build msDS-AllowedToActOnBehalfOfOtherIdentity in binary format from SDDL string that describe the object Owner + Group + DACL allowed to act on behalf")
+	allowedToActOnBehalfOfOtherIdentity_group.add_argument("--buildAllowedToActOnBehalfOfOtherIdentity", help = "Build msDS-AllowedToActOnBehalfOfOtherIdentity in binary format Base64-encoded from SDDL string that describe the object Owner + Group + DACL allowed to act on behalf")
 	allowedToActOnBehalfOfOtherIdentity_group.add_argument("--parseAllowedToActOnBehalfOfOtherIdentity", help = "Parse msDS-AllowedToActOnBehalfOfOtherIdentity from SDDL in Base64 that describe the object Owner + Group + DACL allowed to act on behalf")
 
 	objectGUID_group = parser.add_argument_group('objectGUID options')
-	objectGUID_group.add_argument("--buildObjectGUID", help = "Build objectGUID in binary format from GUID string that describe the GUID of the object")
+	objectGUID_group.add_argument("--buildObjectGUID", help = "Build objectGUID in binary format Base64-encoded from GUID string that describe the GUID of the object")
 	objectGUID_group.add_argument("--parseObjectGUID", help = "Parse objectGUID from GUID in Base64 that describe the GUID of the object")
 
 	objectSID_group = parser.add_argument_group('objectSID options')
-	objectSID_group.add_argument("--buildObjectSID", help = "Build objectSid in binary format from SID string that describe the SID of the object")
+	objectSID_group.add_argument("--buildObjectSID", help = "Build objectSid in binary format Base64-encoded from SID string that describe the SID of the object")
 	objectSID_group.add_argument("--parseObjectSID", help = "Parse objectSid from SID in Base64 that describe the SID of the object")
 
 	userAccountControl_group = parser.add_argument_group('userAccountControl options')
-	userAccountControl_group.add_argument("--buildUserAccountControl", help = "Build userAccountControl value from userAccountControl accesses string separated with pipes that describe the object properties. Ex: DONT_REQ_PREAUTH|TRUSTED_FOR_DELEGATION")
+	userAccountControl_group.add_argument("--buildUserAccountControl", help = "Build userAccountControl integer value from userAccountControl accesses string separated with pipes that describe the object properties. Ex: DONT_REQ_PREAUTH|TRUSTED_FOR_DELEGATION")
 	userAccountControl_group.add_argument("--parseUserAccountControl", type = int, help = "Parse userAccountControl from integer value that describe the object properties")
 
 	gMSA_group = parser.add_argument_group('gMSA options')
@@ -2283,32 +2340,34 @@ if __name__ == "__main__":
 	conn = None
 
 	if (args.listACEWithTrusteeSID != None):
-		sids = args.listACEWithTrusteeSID.split(",")
+		samAccountNames = args.listACEWithTrusteeSID.split(",")
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
-		listACEWithTrusteeSID(conn, args.domain, sids)
-	if (args.buildNtSecurityDescriptor != None):
-		buildNTSecurityDescriptor(args.buildNtSecurityDescriptor)
+		listACEWithTrusteeSID(conn, args.domain, samAccountNames, args.recursiveACEWithTrusteeSID)
+	if (args.buildNTSecurityDescriptor != None):
+		NTSecurityDescriptor = buildNTSecurityDescriptor(args.buildNTSecurityDescriptor)
+	if (args.parseNTSecurityDescriptor != None):
+		sddl = parseNTSecurityDescriptor(base64.b64decode(args.parseNTSecurityDescriptor))
 	if (args.getACLForDN != None):
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
 		getACLForDN(conn, args.domain, args.getACLForDN)
 	if (args.buildAllowedToActOnBehalfOfOtherIdentity != None):
-		buildAllowedToActOnBehalfOfOtherIdentity(args.buildAllowedToActOnBehalfOfOtherIdentity)
+		allowedToActOnBehalfOfOtherIdentity = buildAllowedToActOnBehalfOfOtherIdentity(args.buildAllowedToActOnBehalfOfOtherIdentity)
 	if (args.parseAllowedToActOnBehalfOfOtherIdentity != None):
-		parseAllowedToActOnBehalfOfOtherIdentity(args.parseAllowedToActOnBehalfOfOtherIdentity)
+		sddl = parseAllowedToActOnBehalfOfOtherIdentity(args.parseAllowedToActOnBehalfOfOtherIdentity)
 	if (args.buildObjectGUID != None):
-		buildObjectGUID(args.buildObjectGUID)
+		objectGUID = buildObjectGUID(args.buildObjectGUID)
 	if (args.parseObjectGUID != None):
-		parseObjectGUID(args.parseObjectGUID)
+		guid = parseObjectGUID(args.parseObjectGUID)
 	if (args.buildObjectSID != None):
-		buildObjectSID(args.buildObjectSID)
+		objectSID = buildObjectSID(args.buildObjectSID)
 	if (args.parseObjectSID != None):
-		parseObjectSID(args.parseObjectSID)
+		sid = parseObjectSID(args.parseObjectSID)
 	if (args.buildUserAccountControl != None):
-		buildUserAccountControl(args.buildUserAccountControl)
+		uac = buildUserAccountControl(args.buildUserAccountControl)
 	if (args.parseUserAccountControl != None):
-		parseUserAccountControl(args.parseUserAccountControl)
+		rights = parseUserAccountControl(args.parseUserAccountControl)
 	if (args.listGMSA):
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
