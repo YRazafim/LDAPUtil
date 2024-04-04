@@ -1908,10 +1908,11 @@ def parseNTSecurityDescriptor(sdData, dn = None, sids_filter = None):
 	return sddl
 
 def getMemberOfs(conn, domain, objects):
-	res = objects
+	res = []
 	for object in objects:
 		if isinstance(object, bytes):
 			object = object.decode()
+		res += [object]
 		entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(name={object})(distinguishedName={object}))", attributes = ["memberOf", "samAccountName"])
 		for entry in entry_generator:
 			if entry["type"] == "searchResEntry":
@@ -1920,12 +1921,50 @@ def getMemberOfs(conn, domain, objects):
 					res += getMemberOfs(conn, domain, dns)
 	return list(set(res))
 
-def getSIDs(conn, domain, objects):
-	sids = []
+WELL_KNOWNS_DOMAIN_RIDS = {
+	512: "Domain Admins",
+	513: "Domain Users",
+	514: "Domain Guests",
+	515: "Domain Computers",
+	516: "Domain Controllers",
+	517: "Cert Publishers",
+	518: "Schema Admins",
+	519: "Enterprise Admins",
+	520: "Group Policy Creator Owners",
+	521: "Read-only Domain Controllers",
+	522: "Clonable Controllers",
+	525: "Protected Users",
+	526: "Key Admins",
+	527: "Enterprise Key Admins"
+}
+def getPrimaryGroupdID(conn, domain, objects):
+	res = []
 	for object in objects:
 		if isinstance(object, bytes):
 			object = object.decode()
-		entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(name={object})(distinguishedName={object}))", attributes = ["objectSID"])
+		res += [object]
+		entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(name={object})(distinguishedName={object}))", attributes = ["primaryGroupID"])
+		for entry in entry_generator:
+			if entry["type"] == "searchResEntry":
+				names = []
+				ids = entry["raw_attributes"]["primaryGroupID"]
+				for id in ids:
+					id = int(id.decode())
+					name = WELL_KNOWNS_DOMAIN_RIDS[id]
+					names += [name]
+				res += getPrimaryGroupdID(conn, domain, names)
+	return list(set(res))
+
+def getSIDs(conn, domain, objects):
+	sids = []
+	base_dn = ",".join(f"DC={component}" for component in domain.split("."))
+	for object in objects:
+		if isinstance(object, bytes):
+			object = object.decode()
+		if object.endswith(base_dn): # We have a distinguishedName
+			entry_generator = search(conn, domain, filter = f"(distinguishedName={object})", attributes = ["objectSID"])
+		else: # We can have a name or samAccountName. Treat name as distinguished name started with CN=<name>* to avoid duplicates
+			entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(distinguishedName=CN={object}*))", attributes = ["objectSID"])
 		for entry in entry_generator:
 			if entry["type"] == "searchResEntry":
 				sids += [entry["attributes"]["objectSID"]]
@@ -1940,11 +1979,19 @@ def listACEWithTrusteeSID(conn, domain, sams, recursive):
 	objects = sams
  
 	if (recursive):
-		print("[+] Searching memberOf's for provided samAccountName")
+		print("[+] Searching provided samAccountName's memberships in groups")
 		objects = getMemberOfs(conn, domain, objects)
-  
+		objects = getPrimaryGroupdID(conn, domain, objects)
+		objects += ["Authenticated Users", "Everyone"]
+	
 	# Get SIDs from samAccountName, name or distinguishedName
 	sids = getSIDs(conn, domain, objects)
+	if (recursive):
+		sids += ["S-1-5-11", "S-1-1-0"]
+ 
+	print("[+] Current mapping:")
+	for i in range(len(sids)):
+		print(f"\t{sids[i]}: {objects[i]}")
   
 	control_value = b"\x30\x0b\x02\x01\x77\x04\x00\xa0\x04\x30\x02\x04\x00"  # Control value for LDAP Extended Operation
 	entry_generator = search(conn, domain, attributes = ["distinguishedName", "nTSecurityDescriptor"], controls = [("1.2.840.113556.1.4.801", True, control_value),])
@@ -2298,7 +2345,7 @@ if __name__ == "__main__":
 
 	ntsecuritydesc_group = parser.add_argument_group('nTSecurityDescriptor options')
 	ntsecuritydesc_group.add_argument("--listACEWithTrusteeSID", help = "List AD objects' ACEs on which provided samAccountName are trusted. Commas separated list")
-	ntsecuritydesc_group.add_argument("--recursiveACEWithTrusteeSID", help = "Recursively check samAccountName's memberOf for ACEs trusts", action = "store_true")
+	ntsecuritydesc_group.add_argument("--recursiveACEWithTrusteeSID", help = "Recursively check samAccountName's memberships in groups for ACEs trusts", action = "store_true")
 	ntsecuritydesc_group.add_argument("--getACLForDN", help = "Get ACLs for the following distinguishedName")
 	ntsecuritydesc_group.add_argument("--buildNTSecurityDescriptor", help = "Build nTSecurityDescriptor in binary format Base64-encoded from SDDL string that describe the Owner + Group + DACL for the object")
 	ntsecuritydesc_group.add_argument("--parseNTSecurityDescriptor", help = "Parse nTSecurityDescriptor from SDDL string in Base64 that describe the Owner + Group + DACL for the object")
