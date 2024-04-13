@@ -4,11 +4,15 @@ import argparse, base64, binascii, hashlib, struct, datetime, enum, io
 
 # In case OpenSSL have MD4 disabled
 import ctypes
-ctypes.CDLL("libssl.so").OSSL_PROVIDER_load(None, b"legacy")
-ctypes.CDLL("libssl.so").OSSL_PROVIDER_load(None, b"default")
+try:
+	ctypes.CDLL("libssl.so").OSSL_PROVIDER_load(None, b"legacy")
+	ctypes.CDLL("libssl.so").OSSL_PROVIDER_load(None, b"default")
+except:
+	pass
 
 # LDAP connection libs
 from ldap3 import Server, Connection, NTLM, SASL, KERBEROS, ALL, SUBTREE, ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES
+from ldap3.utils.conv import escape_filter_chars
 from ldap3.core.exceptions import LDAPAttributeError
 from gssapi import Credentials
 
@@ -1887,7 +1891,9 @@ def getMemberOfs(conn, domain, objects):
 		if isinstance(object, bytes):
 			object = object.decode()
 		res += [object]
-		entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(name={object})(distinguishedName={object}))", attributes = ["memberOf", "samAccountName"])
+		escaped_object = escape_filter_chars(object)
+		filter = f"(|(samAccountName={escaped_object})(name={escaped_object})(distinguishedName={escaped_object}))"
+		entry_generator = search(conn, domain, filter = filter, attributes = ["memberOf", "samAccountName"])
 		for entry in entry_generator:
 			if entry["type"] == "searchResEntry":
 				dns = entry["raw_attributes"]["memberOf"]
@@ -1917,7 +1923,9 @@ def getPrimaryGroupdID(conn, domain, objects):
 		if isinstance(object, bytes):
 			object = object.decode()
 		res += [object]
-		entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(name={object})(distinguishedName={object}))", attributes = ["primaryGroupID"])
+		escaped_object = escape_filter_chars(object)
+		filter = f"(|(samAccountName={escaped_object})(name={escaped_object})(distinguishedName={escaped_object}))"
+		entry_generator = search(conn, domain, filter = filter, attributes = ["primaryGroupID"])
 		for entry in entry_generator:
 			if entry["type"] == "searchResEntry":
 				names = []
@@ -1935,10 +1943,11 @@ def getSIDs(conn, domain, objects):
 	for object in objects:
 		if isinstance(object, bytes):
 			object = object.decode()
+		escaped_object = escape_filter_chars(object)
 		if object.endswith(base_dn): # We have a distinguishedName
-			entry_generator = search(conn, domain, filter = f"(distinguishedName={object})", attributes = ["objectSID"])
+			entry_generator = search(conn, domain, filter = f"(distinguishedName={escaped_object})", attributes = ["objectSID"])
 		else: # We can have a name or samAccountName. Treat name as distinguished name started with CN=<name>* to avoid duplicates
-			entry_generator = search(conn, domain, filter = f"(|(samAccountName={object})(distinguishedName=CN={object}*))", attributes = ["objectSID"])
+			entry_generator = search(conn, domain, filter = f"(|(samAccountName={escaped_object})(distinguishedName=CN={escaped_object}*))", attributes = ["objectSID"])
 		for entry in entry_generator:
 			if entry["type"] == "searchResEntry":
 				sids[entry["attributes"]["objectSID"]] = object
