@@ -21,8 +21,13 @@ from gssapi import Credentials
 ######################
 
 def connect_ldap(server_url, username, password, nthash, domain, authentication, ccache):
+	print("-----------------------------------------------------")
+	print("[+] Connecting to LDAP server")
+	print("-----------------------------------------------------")
+	print()
+
 	if (server_url == None or username == None or domain == None or authentication == None):
-		print("[-] ServerURL/Username/Domain/AuthenticationMethod missing")
+		print("[-] ServerURL/Username/Domain/AuthenticationMethod missing\n")
 		exit()
 
 	use_ssl = server_url.lower().startswith("ldaps://")
@@ -37,7 +42,7 @@ def connect_ldap(server_url, username, password, nthash, domain, authentication,
 	user_dn = f"{domain}\\{username}"
 	if authentication == "NTLM":
 		if (password == None and nthash == None):
-			print("[-] Password or NT hash required for NTLM authentication")
+			print("[-] Password or NT hash required for NTLM authentication\n")
 			exit()
 		if (nthash != None):
 			password = "0" * 32 + ":" + nthash
@@ -55,7 +60,7 @@ def connect_ldap(server_url, username, password, nthash, domain, authentication,
 			print("[+] Authenticated successfully using Kerberos")
 			return conn
 	else:
-		print("[-] Invalid authentication method")
+		print("[-] Invalid authentication method\n")
 		exit()
 
 def search(conn, domain, baseDN = None, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
@@ -118,9 +123,9 @@ class GUID:
 		return '-'.join([self.Data1.hex(), self.Data2.hex(),self.Data3.hex(),self.Data4[:2].hex(),self.Data4[2:].hex()])
 
 def parseObjectGUID(guidB64):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Parsing objectGUID")
-	print("-------------------------")
+	print("-----------------------------------------------------")
 
 	# Base64 Decode + Binary format to GUID format
 	guid = GUID.from_bytes(base64.b64decode(guidB64))
@@ -131,9 +136,9 @@ def parseObjectGUID(guidB64):
 	return guid.__str__()
 
 def buildObjectGUID(guidStr):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Building objectGUID")
-	print("-------------------------")
+	print("-----------------------------------------------------")
 
 	# Build GUID object
 	guid = GUID.from_string(guidStr)
@@ -286,7 +291,7 @@ class SID:
 	@staticmethod
 	def from_string(sid_str, wildcard = False):
 		if sid_str[:4] != 'S-1-':
-			print(f"[-] {sid_str} is not a SID")
+			print(f"[-] {sid_str} is not a SID\n")
 			exit()
 		sid = SID()
 		sid.wildcard = wildcard
@@ -371,9 +376,9 @@ class SID:
 				return SID.from_string(domain_sid + '-' +str(account_sid_val))
 
 def parseObjectSID(sidB64):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Parsing objectSid")
-	print("-------------------------")
+	print("-----------------------------------------------------")
 
 	# Base64 Decode + Binary format to SID format
 	sid = SID.from_bytes(base64.b64decode(sidB64))
@@ -384,9 +389,9 @@ def parseObjectSID(sidB64):
 	return sid.__str__()
 
 def buildObjectSID(sidStr):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Building objectSid")
-	print("-------------------------")
+	print("-----------------------------------------------------")
 
 	# Build SID object
 	sid = SID.from_string(sidStr)
@@ -1958,7 +1963,8 @@ def listACEWithTrusteeSID(conn, domain, sams, recursive):
 	print("-----------------------------------------------------")
 	print("[+] Listing AD objects the provided samAccountName are trusted")
 	print("-----------------------------------------------------")
- 
+	print()
+
 	objects = sams
  
 	if (recursive):
@@ -1990,6 +1996,8 @@ def getACLForDN(conn, domain, dn):
 	print("-----------------------------------------------------")
 	print("[+] Listing ACLs for the provided distinguishedName")
 	print("-----------------------------------------------------")
+	print()
+
 	control_value = b"\x30\x0b\x02\x01\x77\x04\x00\xa0\x04\x30\x02\x04\x00"  # Control value for LDAP Extended Operation
 	entry_generator = search(conn, domain, filter = f"(distinguishedName={dn})", attributes = ["distinguishedName", "nTSecurityDescriptor"], controls = [("1.2.840.113556.1.4.801", True, control_value),])
 	for entry in entry_generator:
@@ -2004,9 +2012,10 @@ def getACLForDN(conn, domain, dn):
 ############################
 
 def buildNTSecurityDescriptor(sddlStr):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Building nTSecurityDescriptor")
-	print("-------------------------")
+	print("-----------------------------------------------------")
+	print()
 
 	# Binary format from SDDL format (https://github.com/skelsec/winacl)
 	sd = SECURITY_DESCRIPTOR.from_sddl(sddlStr)
@@ -2037,7 +2046,8 @@ def listKerbDelegForSAM(conn, domain, sams):
 	print("-----------------------------------------------------")
 	print("[+] Listing Kerberos Delegations (KUD, KCD, RBCD) allowed for provided samAccountName")
 	print("-----------------------------------------------------")
- 
+	print()
+
 	# Get SIDs from samAccountName
 	sids = getSIDs(conn, domain, sams)
 
@@ -2101,6 +2111,7 @@ def parseAllowedToActOnBehalfOfOtherIdentity(sdB64):
 	print("-----------------------------------------------------")
 	print("[+] Parsing msDS-AllowedToActOnBehalfOfOtherIdentity")
 	print("-----------------------------------------------------")
+	print()
 
 	# Base64 Decode
 	sdData = base64.b64decode(sdB64) # Base64 Decode
@@ -2118,6 +2129,7 @@ def buildAllowedToActOnBehalfOfOtherIdentity(sddlStr):
 	print("-----------------------------------------------------")
 	print("[+] Building msDS-AllowedToActOnBehalfOfOtherIdentity")
 	print("-----------------------------------------------------")
+	print()
 
 	# Binary format from SDDL format (https://github.com/skelsec/winacl)
 	sd = SECURITY_DESCRIPTOR.from_sddl(sddlStr)
@@ -2160,9 +2172,10 @@ USER_ACCOUNT_CONTROL_MASK = {
 USER_ACCOUNT_CONTROL_MASK_INV = {v: k for k, v in USER_ACCOUNT_CONTROL_MASK.items()}
 
 def parseUserAccountControl(uacVal):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Parsing userAccountControl")
-	print("-------------------------")
+	print("-----------------------------------------------------")
+	print()
 
 	uacStr = "|".join([string for value, string in USER_ACCOUNT_CONTROL_MASK_INV.items() if value & uacVal])
 
@@ -2171,9 +2184,10 @@ def parseUserAccountControl(uacVal):
 	return uacStr
 
 def buildUserAccountControl(uacStr):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Building userAccountControl")
-	print("-------------------------")
+	print("-----------------------------------------------------")
+	print()
 
 	properties = uacStr.split("|")
 	uacVal = 0
@@ -2192,6 +2206,7 @@ def listKerbNoPreauth(conn, domain):
 	print("-----------------------------------------------------")
 	print("[+] Listing AD users without Kerberos Pre-Authentication")
 	print("-----------------------------------------------------")
+	print()
 
 	entry_generator = search(conn, domain, attributes = ["distinguishedName", "userAccountControl"])
 	nbentries = 0
@@ -2205,6 +2220,21 @@ def listKerbNoPreauth(conn, domain):
 					print("[+] {} configured without Kerberos Pre-Authentication".format(dn))
 	if nbentries == 0:
 		print("[-] All AD objects have Kerberos Pre-Authentication")
+
+######################
+### Kerberoastable ###
+######################
+
+def listKerberoastable(conn, domain):
+	print("-----------------------------------------------------")
+	print("[+] Listing AD objects with SPN(s)")
+	print("-----------------------------------------------------")
+	print()
+
+	entry_generator = search(conn, domain, filter = "(servicePrincipalName=*)", attributes = ["samAccountName"])
+	for entry in entry_generator:
+		if entry["type"] == "searchResEntry":
+			print("[+] {}".format(entry["raw_attributes"]["samAccountName"][0].decode()))
 
 ############
 ### gMSA ###
@@ -2310,9 +2340,10 @@ class MSDS_MANAGEDPASSWORD_ID:
 		return ManagedPasswordId
 
 def listGMSA(conn, domain):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Listing gMSA accounts")
-	print("-------------------------")
+	print("-----------------------------------------------------")
+	print()
 
 	entry_generator = search(conn, domain, attributes = ["sAMAccountName", "msDS-ManagedPassword", "msDS-ManagedPasswordId", "msDS-ManagedPasswordInterval", "msDS-GroupMSAMembership"])
 	nbentries = 0
@@ -2343,7 +2374,6 @@ def listGMSA(conn, domain):
 					sd = SECURITY_DESCRIPTOR.from_bytes(entry["raw_attributes"]["msDS-GroupMSAMembership"][0])
 					sddl = sd.to_sddl()
 					print("\t[+] gMSA Membership SDDL = {}".format(sddl))
-
 	if nbentries == 0:
 		print("[-] No LDAP encrypted connection used and/or no gMSA accounts")
 
@@ -2365,9 +2395,10 @@ def windows_timestamp_to_date(timestamp):
     return date.strftime("%Y-%m-%d %H:%M:%S")
 
 def listLAPS(conn, domain):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Listing LA pwds managed by LAPS")
-	print("-------------------------")
+	print("-----------------------------------------------------")
+	print()
 
 	try:
 		entry_generator = search(conn, domain, attributes = ["sAMAccountName", "ms-Mcs-AdmPwd", "ms-Mcs-AdmPwdExpirationTime"])
@@ -2391,9 +2422,10 @@ def listLAPS(conn, domain):
 #################
 
 def listBitlocker(conn, domain):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Listing Bitlocker Recovery Keys")
-	print("-------------------------")
+	print("-----------------------------------------------------")
+	print()
 
 	entry_generator = search(conn, domain, attributes = ["sAMAccountName", "msFVE-RecoveryPassword"])
 	nbentries = 0
@@ -2412,10 +2444,11 @@ def listBitlocker(conn, domain):
 ########################
 
 def listLDAPDesc(conn, domain, filters = None):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Listing AD users' Description attribute")
-	print("-------------------------")
- 
+	print("-----------------------------------------------------")
+	print()
+
 	if (filters != None):
 		print("[+] Filtering with keywords: {}".format(filters))
 
@@ -2442,9 +2475,9 @@ def listLDAPDesc(conn, domain, filters = None):
 ######################
 
 def LDAPQuery(conn, domain, baseDN, filter = "(objectClass=*)", attributes = [ALL_ATTRIBUTES, ALL_OPERATIONAL_ATTRIBUTES], controls = None):
-	print("-------------------------")
+	print("-----------------------------------------------------")
 	print("[+] Sending raw LDAP query")
-	print("-------------------------")
+	print("-----------------------------------------------------")
 
 	entry_generator = search(conn, domain, baseDN, filter = filter, attributes = attributes, controls = controls)
 	nbentries = 0
@@ -2504,6 +2537,9 @@ if __name__ == "__main__":
 	kerbNoPreauth_group = parser.add_argument_group('Kerberos Pre-Authentication options')
 	kerbNoPreauth_group.add_argument("--listKerbNoPreauth", help = "List AD users without Kerberos Pre-Authentication", action = "store_true")
 
+	kerberoastable_group = parser.add_argument_group('Kerberoastable options')
+	kerberoastable_group.add_argument("--listKerberoastable", help = "List AD objects with SPN(s)", action = "store_true")
+
 	gMSA_group = parser.add_argument_group('gMSA options')
 	gMSA_group.add_argument("--listGMSA", help = "List gMSA accounts. LDAPS or LDAP with StartTLS required for msDS-ManagedPassword", action = "store_true")
 
@@ -2532,62 +2568,93 @@ if __name__ == "__main__":
 		samAccountNames = args.listACEWithTrusteeSID.split(",")
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		listACEWithTrusteeSID(conn, args.domain, samAccountNames, args.recursiveACEWithTrusteeSID)
+		print()
 	if (args.getACLForDN != None):
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		getACLForDN(conn, args.domain, args.getACLForDN)
+		print()
 
 	if (args.buildNTSecurityDescriptor != None):
 		NTSecurityDescriptor = buildNTSecurityDescriptor(args.buildNTSecurityDescriptor)
+		print()
 	if (args.parseNTSecurityDescriptor != None):
 		sddl = parseNTSecurityDescriptor(base64.b64decode(args.parseNTSecurityDescriptor))
+		print()
 
 	if (args.listKerbDelegForSAM != None):
 		samAccountNames = args.listKerbDelegForSAM.split(",")
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		listKerbDelegForSAM(conn, args.domain, samAccountNames)
+		print()
 
 	if (args.buildAllowedToActOnBehalfOfOtherIdentity != None):
 		allowedToActOnBehalfOfOtherIdentity = buildAllowedToActOnBehalfOfOtherIdentity(args.buildAllowedToActOnBehalfOfOtherIdentity)
+		print()
 	if (args.parseAllowedToActOnBehalfOfOtherIdentity != None):
 		sddl = parseAllowedToActOnBehalfOfOtherIdentity(args.parseAllowedToActOnBehalfOfOtherIdentity)
+		print()
 
 	if (args.buildObjectGUID != None):
 		objectGUID = buildObjectGUID(args.buildObjectGUID)
+		print()
 	if (args.parseObjectGUID != None):
 		guid = parseObjectGUID(args.parseObjectGUID)
+		print()
 
 	if (args.buildObjectSID != None):
 		objectSID = buildObjectSID(args.buildObjectSID)
+		print()
 	if (args.parseObjectSID != None):
 		sid = parseObjectSID(args.parseObjectSID)
+		print()
 
 	if (args.buildUserAccountControl != None):
 		uac = buildUserAccountControl(args.buildUserAccountControl)
+		print()
 	if (args.parseUserAccountControl != None):
 		rights = parseUserAccountControl(args.parseUserAccountControl)
+		print()
 
 	if (args.listKerbNoPreauth):
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		listKerbNoPreauth(conn, args.domain)
+		print()
+
+	if (args.listKerberoastable):
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
+		listKerberoastable(conn, args.domain)
+		print()
 
 	if (args.listGMSA):
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		listGMSA(conn, args.domain)
+		print()
 
 	if (args.listLAPS):
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		listLAPS(conn, args.domain)
+		print()
 
 	if (args.listBitlocker):
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		listBitlocker(conn, args.domain)
+		print()
 
 	if (args.listLDAPDesc):
 		if args.LDAPDescFilterWith != None:
@@ -2596,7 +2663,9 @@ if __name__ == "__main__":
 			filter = None
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		listLDAPDesc(conn, args.domain, filter)
+		print()
 
 	if (args.rawLDAPQuery):
 		if (args.LDAPFilter == None):
@@ -2609,4 +2678,6 @@ if __name__ == "__main__":
 			attributes = args.LDAPAttributes.split(",")
 		if (conn == None):
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
 		LDAPQuery(conn, args.domain, args.LDAPBaseDN, filter, attributes, args.LDAPControls)
+		print()
