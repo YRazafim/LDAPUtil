@@ -2236,6 +2236,34 @@ def listKerberoastable(conn, domain):
 		if entry["type"] == "searchResEntry":
 			print("[+] {}".format(entry["raw_attributes"]["samAccountName"][0].decode()))
 
+def getDefaultDomainPwdPolicy(conn, domain):
+	print("-----------------------------------------------------")
+	print("[+] Getting Default Domain Password Policy")
+	print("-----------------------------------------------------")
+	print()
+
+	base_dn = ",".join(f"DC={component}" for component in domain.split("."))
+	entry_generator = search(conn, domain, filter = f"(distinguishedName={base_dn})", attributes = ["lockoutThreshold", "lockoutDuration", "lockoutObservationWindow",
+																								 	"maxPwdAge", "minPwdAge", "minPwdLength", "pwdHistoryLength", "pwdProperties"])
+	for entry in entry_generator:
+		if entry["type"] == "searchResEntry":
+			print("[+] Default Domain Password Policy")
+			print("\tLockout Threshold = {}".format(entry["attributes"]["lockoutThreshold"]))
+			print("\tLockout Duration = {}".format(entry["attributes"]["lockoutDuration"]))
+			print("\tLockout Observation Window = {}".format(entry["attributes"]["lockoutObservationWindow"]))
+			print("\tMax Pwd Age = {}".format(entry["attributes"]["maxPwdAge"]))
+			print("\tMin Pwd Age = {}".format(entry["attributes"]["minPwdAge"]))
+			print("\tMin Pwd Length = {}".format(entry["attributes"]["minPwdLength"]))
+			print("\tPwd History Length = {}".format(entry["attributes"]["pwdHistoryLength"]))
+			pwdProperties = entry["attributes"]["pwdProperties"]
+			print("\tPwd Properties = {}".format(pwdProperties))
+			# https://ldapwiki.com/wiki/Wiki.jsp?page=PwdProperties
+			print("\t\tDomain Password Complex = {}".format((pwdProperties & 1) != 0))
+			print("\t\tDomain Password No Anon Change = {}".format((pwdProperties & 2) != 0))
+			print("\t\tDomain Lockout Admins = {}".format((pwdProperties & 8) != 0))
+			print("\t\tDomain Password Store Cleartext = {}".format((pwdProperties & 16) != 0))
+			print("\t\tDomain Refuse Password Change = {}".format((pwdProperties & 32) != 0))
+
 ############
 ### gMSA ###
 ############
@@ -2540,6 +2568,9 @@ if __name__ == "__main__":
 	kerberoastable_group = parser.add_argument_group('Kerberoastable options')
 	kerberoastable_group.add_argument("--listKerberoastable", help = "List AD users with SPN(s)", action = "store_true")
 
+	domainPolicy_group = parser.add_argument_group('Default Domain Password Policy options')
+	domainPolicy_group.add_argument("--getDefaultDomainPwdPolicy", help = "Get Default Domain Password Policy", action = "store_true")
+
 	gMSA_group = parser.add_argument_group('gMSA options')
 	gMSA_group.add_argument("--listGMSA", help = "List gMSA accounts. LDAPS or LDAP with StartTLS required for msDS-ManagedPassword", action = "store_true")
 
@@ -2559,6 +2590,8 @@ if __name__ == "__main__":
 	rawLDAPQuery_group.add_argument("--LDAPFilter", help = "LDAP filter")
 	rawLDAPQuery_group.add_argument("--LDAPAttributes", help = "LDAP attributes to search for. Commas separated list")
 	rawLDAPQuery_group.add_argument("--LDAPControls", help = "LDAP additional controls to send in the request")
+
+	# TODO: ADCS
 
 	args = parser.parse_args()
 
@@ -2633,6 +2666,13 @@ if __name__ == "__main__":
 			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
 			print()
 		listKerberoastable(conn, args.domain)
+		print()
+
+	if (args.getDefaultDomainPwdPolicy):
+		if (conn == None):
+			conn = connect_ldap(args.server_url, args.username, args.password, args.nthash, args.domain, args.authentication, args.ccache)
+			print()
+		getDefaultDomainPwdPolicy(conn, args.domain)
 		print()
 
 	if (args.listGMSA):
