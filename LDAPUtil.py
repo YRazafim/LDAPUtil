@@ -2227,11 +2227,11 @@ def listKerbNoPreauth(conn, domain):
 
 def listKerberoastable(conn, domain):
 	print("-----------------------------------------------------")
-	print("[+] Listing AD objects with SPN(s)")
+	print("[+] Listing AD users with SPN(s)")
 	print("-----------------------------------------------------")
 	print()
 
-	entry_generator = search(conn, domain, filter = "(servicePrincipalName=*)", attributes = ["samAccountName"])
+	entry_generator = search(conn, domain, filter = "(&(servicePrincipalName=*)(sAMAccountType=805306368))", attributes = ["samAccountName"])
 	for entry in entry_generator:
 		if entry["type"] == "searchResEntry":
 			print("[+] {}".format(entry["raw_attributes"]["samAccountName"][0].decode()))
@@ -2538,7 +2538,7 @@ if __name__ == "__main__":
 	kerbNoPreauth_group.add_argument("--listKerbNoPreauth", help = "List AD users without Kerberos Pre-Authentication", action = "store_true")
 
 	kerberoastable_group = parser.add_argument_group('Kerberoastable options')
-	kerberoastable_group.add_argument("--listKerberoastable", help = "List AD objects with SPN(s)", action = "store_true")
+	kerberoastable_group.add_argument("--listKerberoastable", help = "List AD users with SPN(s)", action = "store_true")
 
 	gMSA_group = parser.add_argument_group('gMSA options')
 	gMSA_group.add_argument("--listGMSA", help = "List gMSA accounts. LDAPS or LDAP with StartTLS required for msDS-ManagedPassword", action = "store_true")
