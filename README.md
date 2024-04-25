@@ -4,7 +4,7 @@ Unpacking various LDAP attributes:
 * `objectGUID`: `GUID` that identify the object
 * `objectSid`: `SID` that identify the object
 * `nTSecurityDescriptor`: Access rights on the object based on a `Security Descriptor`
-* `msDS-AllowedToActOnBehalfOfOtherIdentity`: Identify objects allowed to act on behalf of others on this object for `Resource-Based Constrained Delegation (RBCD)`
+* `msDS-AllowedToActOnBehalfOfOtherIdentity`: `Security Descriptor` that identify objects allowed to act on behalf of others on this object for `Resource-Based Constrained Delegation (RBCD)`
 * `userAccountControl`: User account properties such as
   * `TRUSTED_FOR_DELEGATION`: `Kerberos Unconstrained Delegation (KUD)` enabled for this object
   * `NOT_DELEGATED`: Object is `sensitive and cannot be delegated`
