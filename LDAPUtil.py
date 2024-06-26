@@ -474,13 +474,13 @@ def mapSIDs(conn, domain, sids):
 	print("[+] Get samAccountNames of provided SIDs' string")
 	print("-----------------------------------------------------")
 	print()
- 
+
 	sams = SIDsToSAMs(conn, domain, sids)
- 
+
 	print("[+] Current mapping:")
 	for key, val in sams.items():
 		print(f"\t{key}: {val}")
-    
+
 
 ###########
 ### ACE ###
